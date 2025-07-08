@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3333;
 const allowedOrigins = [
   'http://localhost:3000', // Para os seus testes locais
   // ADICIONE AQUI O ENDEREÇO DO SEU SITE NO VERCEL
-  'https://saas-barbearia.vercel.app/' 
+  'https://saas-barbearia.vercel.app' 
 ];
 
 const corsOptions = {
