@@ -1,17 +1,21 @@
 // src/controllers/adminController.js
 const db = require('../config/database');
 
+// Função para as estatísticas do topo do dashboard (CORRIGIDA)
 exports.getDashboardStats = async (req, res) => {
   try {
     const month_start = "DATE_TRUNC('month', NOW())";
     const month_end = "DATE_TRUNC('month', NOW()) + INTERVAL '1 month'";
 
+    // Consultas corrigidas para evitar o erro "missing FROM-clause"
     const revenueQuery = `SELECT SUM(s.price) FROM appointments a JOIN services s ON a.service_id = s.id WHERE a.status = 'Concluído' AND a.appointment_time >= ${month_start} AND a.appointment_time < ${month_end}`;
     const doneQuery = `SELECT COUNT(id) FROM appointments WHERE status = 'Concluído' AND appointment_time >= ${month_start} AND appointment_time < ${month_end}`;
     const pendingQuery = `SELECT COUNT(id) FROM appointments WHERE status = 'Pendente' AND appointment_time >= NOW() AND appointment_time < ${month_end}`;
 
     const [revenueResult, doneResult, pendingResult] = await Promise.all([
-      db.query(revenueQuery), db.query(doneQuery), db.query(pendingQuery)
+      db.query(revenueQuery),
+      db.query(doneQuery),
+      db.query(pendingQuery)
     ]);
 
     res.status(200).json({
@@ -21,10 +25,11 @@ exports.getDashboardStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar estatísticas do dashboard:', error);
-    res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    res.status(500).json({ error: 'Ocorreu um erro interno no getDashboardStats.' });
   }
 };
 
+// Função para a agenda completa do administrador
 exports.getAllAppointments = async (req, res) => {
   try {
     let query = `
@@ -37,18 +42,29 @@ exports.getAllAppointments = async (req, res) => {
     `;
     const params = [];
     let paramIndex = 1;
-    if (req.query.date) { query += ` AND DATE(a.appointment_time) = $${paramIndex++}`; params.push(req.query.date); }
-    if (req.query.barberId) { query += ` AND a.barber_id = $${paramIndex++}`; params.push(req.query.barberId); }
-    if (req.query.status) { query += ` AND a.status = $${paramIndex++}`; params.push(req.query.status); }
+
+    if (req.query.date) {
+      query += ` AND DATE(a.appointment_time) = $${paramIndex++}`;
+      params.push(req.query.date);
+    }
+    if (req.query.barberId) {
+      query += ` AND a.barber_id = $${paramIndex++}`;
+      params.push(req.query.barberId);
+    }
+    if (req.query.status) {
+      query += ` AND a.status = $${paramIndex++}`;
+      params.push(req.query.status);
+    }
     query += " ORDER BY a.appointment_time DESC";
     const { rows } = await db.query(query, params);
     res.status(200).json(rows);
   } catch (error) {
     console.error('Erro ao buscar a agenda completa:', error);
-    res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    res.status(500).json({ error: 'Ocorreu um erro interno no getAllAppointments.' });
   }
 };
 
+// Função para os dados do gráfico de faturação
 exports.getRevenueChartData = async (req, res) => {
   const { period = '7days' } = req.query;
   let query;
@@ -60,7 +76,7 @@ exports.getRevenueChartData = async (req, res) => {
       case 'thisMonth':
         query = `SELECT TO_CHAR(d.day, 'DD/MM') AS date, COALESCE(SUM(s.price), 0) AS revenue FROM generate_series(DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', '1 day'::interval) AS d(day) LEFT JOIN appointments a ON DATE(a.appointment_time) = d.day AND a.status = 'Concluído' LEFT JOIN services s ON a.service_id = s.id GROUP BY d.day ORDER BY d.day ASC;`;
         break;
-      default:
+      default: // '7days'
         query = `SELECT TO_CHAR(d.day, 'DD/MM') AS date, COALESCE(SUM(s.price), 0) AS revenue FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval) AS d(day) LEFT JOIN appointments a ON DATE(a.appointment_time) = d.day AND a.status = 'Concluído' LEFT JOIN services s ON a.service_id = s.id GROUP BY d.day ORDER BY d.day ASC;`;
         break;
     }
@@ -69,10 +85,11 @@ exports.getRevenueChartData = async (req, res) => {
     res.status(200).json(chartData);
   } catch (error) {
     console.error('Erro ao buscar dados do gráfico:', error);
-    res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    res.status(500).json({ error: 'Ocorreu um erro interno no getRevenueChartData.' });
   }
 };
 
+// Função para os relatórios de desempenho
 exports.getPerformanceReport = async (req, res) => {
   try {
     const barberPerformanceQuery = `SELECT b.name AS barber_name, COUNT(a.id) AS completed_appointments, COALESCE(SUM(s.price), 0) AS total_revenue FROM barbers b LEFT JOIN appointments a ON b.id = a.barber_id AND a.status = 'Concluído' LEFT JOIN services s ON a.service_id = s.id GROUP BY b.name ORDER BY total_revenue DESC;`;
@@ -84,6 +101,6 @@ exports.getPerformanceReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar dados dos relatórios:', error);
-    res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    res.status(500).json({ error: 'Ocorreu um erro interno no getPerformanceReport.' });
   }
 };
