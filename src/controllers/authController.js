@@ -17,12 +17,10 @@ exports.login = async (req, res) => {
     }
     const user = userResult.rows[0];
 
-    // Se o utilizador encontrado não for admin, recusa o login
     if (user.role !== 'admin') {
         return res.status(403).json({ error: 'Acesso negado. Esta área é apenas para administradores.' });
     }
     
-    // O admin precisa de ter uma senha definida
     if (!user.password_hash) {
         return res.status(401).json({ error: 'Este administrador não tem uma senha configurada.' });
     }
@@ -32,7 +30,12 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
+    const tokenPayload = { id: user.id, name: user.name, role: user.role };
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '8h' });
+
+    // --- DIAGNÓSTICO ---
+    console.log(`Token gerado com sucesso para o admin: ${user.name}`);
+    
     res.status(200).json({ message: 'Login de administrador bem-sucedido!', token: token });
 
   } catch (error) {
@@ -53,7 +56,13 @@ exports.profileLogin = async (req, res) => {
       return res.status(404).json({ error: 'Perfil não encontrado.' });
     }
     const user = userResult.rows[0];
-    const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
+
+    const tokenPayload = { id: user.id, name: user.name, role: user.role };
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '8h' });
+
+    // --- DIAGNÓSTICO ---
+    console.log(`Token de perfil gerado com sucesso para: ${user.name}`);
+
     res.status(200).json({ message: 'Login de perfil bem-sucedido!', token: token });
   } catch (error) {
     console.error('Erro no login de perfil:', error);
