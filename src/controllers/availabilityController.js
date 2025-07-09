@@ -4,24 +4,23 @@ const db = require('../config/database');
 /**
  * Esta é a função principal e o "cérebro" da nossa lógica.
  * Ela calcula todos os horários de um dia para um barbeiro e atribui um status
- * (Disponível, Agendado, Bloqueado) a cada um.
+ * (Disponível, Agendado, Bloqueado) a cada um, respeitando o horário de trabalho do BD.
  */
 async function getDayScheduleForBarber(barberId, date) {
     const requestedDate = new Date(date + 'T00:00:00');
     const dayOfWeek = requestedDate.getUTCDay(); // 0=Domingo, 1=Segunda, etc.
 
-    // 1. Define o horário de trabalho fixo da loja
-    let workHours = null;
-    if (dayOfWeek >= 2 && dayOfWeek <= 6) { // Terça a Sábado
-        workHours = { start: '09:00', end: '19:00' };
-    } else if (dayOfWeek === 0) { // Domingo
-        workHours = { start: '09:00', end: '12:00' };
-    }
+    // 1. Busca o horário de trabalho do barbeiro para este dia da semana no banco de dados
+    const workHoursQuery = await db.query(
+        'SELECT start_time, end_time FROM working_hours WHERE barber_id = $1 AND day_of_week = $2',
+        [barberId, dayOfWeek]
+    );
 
-    // Se for um dia de folga (Segunda-feira), retorna uma lista vazia.
-    if (!workHours) {
+    // Se não houver horário de trabalho registado para este dia, retorna uma lista vazia.
+    if (workHoursQuery.rows.length === 0) {
         return [];
     }
+    const workHours = workHoursQuery.rows[0];
     
     // 2. Verifica se o barbeiro está ausente neste dia
     const absenceQuery = await db.query(
@@ -34,8 +33,10 @@ async function getDayScheduleForBarber(barberId, date) {
 
     // 3. Gera todos os slots de 30 MINUTOS possíveis para o dia
     const allSlots = [];
-    let currentTime = new Date(`${date}T${workHours.start}:00`);
-    const endTime = new Date(`${date}T${workHours.end}:00`);
+    // As horas vêm como 'HH:MM:SS', usamos isso para criar as datas de início e fim
+    let currentTime = new Date(`${date}T${workHours.start_time}`);
+    const endTime = new Date(`${date}T${workHours.end_time}`);
+
     while (currentTime < endTime) {
         allSlots.push(new Date(currentTime));
         currentTime.setMinutes(currentTime.getMinutes() + 30);

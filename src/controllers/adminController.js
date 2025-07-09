@@ -1,16 +1,30 @@
 // src/controllers/adminController.js
 const db = require('../config/database');
 
-// Função para as estatísticas do topo do dashboard (CORRIGIDA)
+// Função para as estatísticas do topo do dashboard (CORRIGIDA E SEGURA)
 exports.getDashboardStats = async (req, res) => {
   try {
-    const month_start = "DATE_TRUNC('month', NOW())";
-    const month_end = "DATE_TRUNC('month', NOW()) + INTERVAL '1 month'";
+    // Usar NOW() e INTERVAL é mais seguro e padrão em SQL
+    const revenueQuery = `
+      SELECT SUM(s.price) 
+      FROM appointments a 
+      JOIN services s ON a.service_id = s.id 
+      WHERE a.status = 'Concluído' 
+      AND a.appointment_time >= DATE_TRUNC('month', NOW()) 
+      AND a.appointment_time < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
+      
+    const doneQuery = `
+      SELECT COUNT(id) 
+      FROM appointments 
+      WHERE status = 'Concluído' 
+      AND appointment_time >= DATE_TRUNC('month', NOW()) 
+      AND appointment_time < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
 
-    // Consultas corrigidas para evitar o erro "missing FROM-clause"
-    const revenueQuery = `SELECT SUM(s.price) FROM appointments a JOIN services s ON a.service_id = s.id WHERE a.status = 'Concluído' AND a.appointment_time >= ${month_start} AND a.appointment_time < ${month_end}`;
-    const doneQuery = `SELECT COUNT(id) FROM appointments WHERE status = 'Concluído' AND appointment_time >= ${month_start} AND appointment_time < ${month_end}`;
-    const pendingQuery = `SELECT COUNT(id) FROM appointments WHERE status = 'Pendente' AND appointment_time >= NOW() AND appointment_time < ${month_end}`;
+    const pendingQuery = `
+      SELECT COUNT(id) 
+      FROM appointments 
+      WHERE status = 'Pendente' 
+      AND appointment_time >= NOW()`;
 
     const [revenueResult, doneResult, pendingResult] = await Promise.all([
       db.query(revenueQuery),
@@ -28,7 +42,7 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({ error: 'Ocorreu um erro interno no getDashboardStats.' });
   }
 };
-
+// ... (o resto do arquivo continua igual)
 // Função para a agenda completa do administrador
 exports.getAllAppointments = async (req, res) => {
   try {

@@ -6,11 +6,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3333;
 
-// --- CONFIGURAÇÃO DE CORS PROFISSIONAL ---
+// --- SUGESTÃO DE CORS PARA DEPURAÇÃO ---
+// Esta configuração é mais permissiva e pode ajudar a diagnosticar se o CORS é o problema.
+// Para produção, volte a usar a lista de origens permitidas.
+app.use(cors()); 
+
+/*
+// --- CONFIGURAÇÃO DE CORS PROFISSIONAL (PARA QUANDO TUDO ESTIVER A FUNCIONAR)---
 const allowedOrigins = [
   'http://localhost:3000',
-  // SUBSTITUA PELO SEU ENDEREÇO REAL DO VERCEL
-  'https://saas-barbearia.vercel.app' 
+  'https://saas-barbearia.vercel.app' // Verifique se esta URL está exata
 ];
 
 const corsOptions = {
@@ -24,11 +29,13 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
-
-// --- ORDEM DE CONFIGURAÇÃO CORRIGIDA ---
-
-// 1. Aplica as configurações de CORS e JSON primeiro.
 app.use(cors(corsOptions));
+*/
+
+
+// --- O RESTO DO FICHEIRO CONTINUA IGUAL ---
+
+// 1. Aplica as configurações de JSON.
 app.use(express.json());
 
 // 2. Serve os ficheiros estáticos (uploads de fotos).
