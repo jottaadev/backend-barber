@@ -1,18 +1,29 @@
 // src/controllers/availabilityController.js
 const db = require('../config/database');
 
-// --- FUNÇÃO AJUDANTE (O CÉREBRO DA LÓGICA) ---
+/**
+ * Esta é a função principal e o "cérebro" da nossa lógica.
+ * Ela calcula todos os horários de um dia para um barbeiro e atribui um status
+ * (Disponível, Agendado, Bloqueado) a cada um.
+ */
 async function getDayScheduleForBarber(barberId, date) {
     const requestedDate = new Date(date + 'T00:00:00');
-    const dayOfWeek = requestedDate.getUTCDay();
+    const dayOfWeek = requestedDate.getUTCDay(); // 0=Domingo, 1=Segunda, etc.
 
-    // Horário fixo da loja
+    // 1. Define o horário de trabalho fixo da loja
     let workHours = null;
-    if (dayOfWeek >= 2 && dayOfWeek <= 6) { workHours = { start: '09:00', end: '19:00' }; }
-    else if (dayOfWeek === 0) { workHours = { start: '09:00', end: '12:00' }; }
-    if (!workHours) return [];
+    if (dayOfWeek >= 2 && dayOfWeek <= 6) { // Terça a Sábado
+        workHours = { start: '09:00', end: '19:00' };
+    } else if (dayOfWeek === 0) { // Domingo
+        workHours = { start: '09:00', end: '12:00' };
+    }
 
-    // --- NOVA VERIFICAÇÃO DE AUSÊNCIAS ---
+    // Se for um dia de folga (Segunda-feira), retorna uma lista vazia.
+    if (!workHours) {
+        return [];
+    }
+    
+    // 2. Verifica se o barbeiro está ausente neste dia
     const absenceQuery = await db.query(
         "SELECT * FROM absences WHERE barber_id = $1 AND $2 BETWEEN start_date AND end_date",
         [barberId, date]
@@ -21,24 +32,25 @@ async function getDayScheduleForBarber(barberId, date) {
         return []; // Se houver uma ausência registada, o dia está indisponível
     }
 
-    // 1. Gera todos os slots de 30 MINUTOS
+    // 3. Gera todos os slots de 30 MINUTOS possíveis para o dia
     const allSlots = [];
     let currentTime = new Date(`${date}T${workHours.start}:00`);
     const endTime = new Date(`${date}T${workHours.end}:00`);
     while (currentTime < endTime) {
         allSlots.push(new Date(currentTime));
-        currentTime.setMinutes(currentTime.getMinutes() + 30); // Intervalo de 30 minutos
+        currentTime.setMinutes(currentTime.getMinutes() + 30);
     }
 
-    // 2. Busca agendamentos e bloqueios
+    // 4. Busca os agendamentos já existentes e os horários bloqueados
     const bookedSlotsQuery = db.query("SELECT appointment_time FROM appointments WHERE barber_id = $1 AND DATE(appointment_time) = $2 AND status = 'Pendente'", [barberId, date]);
     const blockedSlotsQuery = db.query("SELECT slot_time FROM blocked_slots WHERE barber_id = $1 AND DATE(slot_time) = $2", [barberId, date]);
+    
     const [bookedResult, blockedResult] = await Promise.all([bookedSlotsQuery, blockedSlotsQuery]);
 
     const bookedTimes = new Set(bookedResult.rows.map(r => new Date(r.appointment_time).getTime()));
     const blockedTimes = new Set(blockedResult.rows.map(r => new Date(r.slot_time).getTime()));
 
-    // 3. Monta a agenda do dia com o status de cada horário
+    // 5. Monta a agenda do dia com o status de cada horário
     const daySchedule = allSlots.map(slot => {
         const time = slot.toISOString();
         let status = 'Disponível';
@@ -50,15 +62,76 @@ async function getDayScheduleForBarber(barberId, date) {
     return daySchedule;
 }
 
-exports.getAvailableSlots = async (req, res) => { /* ... (código sem alterações) ... */ };
-exports.getBarberDaySchedule = async (req, res) => { /* ... (código sem alterações) ... */ };
-exports.blockSlot = async (req, res) => { /* ... (código sem alterações) ... */ };
-exports.unblockSlot = async (req, res) => { /* ... (código sem alterações) ... */ };
 
+// Função PÚBLICA que o /agendamento do cliente usa para ver os horários livres
+exports.getAvailableSlots = async (req, res) => {
+    const { barberId, date } = req.query;
+    if (!barberId || !date) {
+        return res.status(400).json({ error: 'ID do barbeiro e data são obrigatórios.' });
+    }
+    try {
+        const schedule = await getDayScheduleForBarber(barberId, date);
+        // Filtra para enviar ao cliente apenas os horários disponíveis
+        const availableSlots = schedule
+            .filter(slot => slot.status === 'Disponível')
+            .map(slot => new Date(slot.time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        res.status(200).json(availableSlots);
+    } catch (error) {
+        console.error("Erro ao buscar disponibilidade:", error);
+        res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    }
+};
 
-// --- NOVAS FUNÇÕES PARA GESTÃO DE AUSÊNCIAS ---
+// Função PRIVADA que a página "Meus Horários" do barbeiro usa
+exports.getBarberDaySchedule = async (req, res) => {
+    const barberId = req.user?.id;
+    const { date } = req.query;
+    if (!barberId || !date) {
+        return res.status(400).json({ error: 'Data é obrigatória.' });
+    }
+    try {
+        const schedule = await getDayScheduleForBarber(barberId, date);
+        // Envia a agenda completa (com todos os status) para o painel do barbeiro
+        res.status(200).json(schedule);
+    } catch (error) {
+        console.error("Erro ao buscar agenda do dia do barbeiro:", error);
+        res.status(500).json({ error: 'Ocorreu um erro interno.' });
+    }
+};
 
-// Busca todas as ausências do barbeiro logado
+// Função para o barbeiro bloquear um horário
+exports.blockSlot = async (req, res) => {
+    const barberId = req.user?.id;
+    const { slot_time } = req.body;
+    if (!slot_time) return res.status(400).json({ error: 'O horário a bloquear é obrigatório.' });
+    try {
+        await db.query(
+            'INSERT INTO blocked_slots (barber_id, slot_time) VALUES ($1, $2)',
+            [barberId, slot_time]
+        );
+        res.status(201).json({ message: 'Horário bloqueado com sucesso.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Não foi possível bloquear o horário.' });
+    }
+};
+
+// Função para o barbeiro desbloquear um horário
+exports.unblockSlot = async (req, res) => {
+    const barberId = req.user?.id;
+    const { slot_time } = req.body;
+    if (!slot_time) return res.status(400).json({ error: 'O horário a desbloquear é obrigatório.' });
+    try {
+        await db.query(
+            'DELETE FROM blocked_slots WHERE barber_id = $1 AND slot_time = $2',
+            [barberId, slot_time]
+        );
+        res.status(200).json({ message: 'Horário desbloqueado com sucesso.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Não foi possível desbloquear o horário.' });
+    }
+};
+
+// Funções para o barbeiro gerir as suas ausências
 exports.getAbsences = async (req, res) => {
     const barberId = req.user?.id;
     try {
@@ -69,7 +142,6 @@ exports.getAbsences = async (req, res) => {
     }
 };
 
-// Adiciona um novo período de ausência
 exports.addAbsence = async (req, res) => {
     const barberId = req.user?.id;
     const { start_date, end_date } = req.body;
@@ -87,7 +159,6 @@ exports.addAbsence = async (req, res) => {
     }
 };
 
-// Remove um período de ausência
 exports.deleteAbsence = async (req, res) => {
     const barberId = req.user?.id;
     const { absenceId } = req.params;
