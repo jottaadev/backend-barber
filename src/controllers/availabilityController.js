@@ -12,7 +12,7 @@ async function getDayScheduleForBarber(barberId, date) {
 
     // 1. Busca o horário de trabalho do barbeiro para este dia da semana no banco de dados
     const workHoursQuery = await db.query(
-        'SELECT start_time, end_time FROM working_hours WHERE barber_id = $1 AND day_of_week = $2',
+        'SELECT start_time, end_time FROM barber_schedules WHERE barber_id = $1 AND day_of_week = $2',
         [barberId, dayOfWeek]
     );
 
