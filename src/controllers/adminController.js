@@ -1,7 +1,6 @@
 // src/controllers/adminController.js
 const db = require('../config/database');
 
-// Função para as estatísticas do topo do dashboard
 exports.getDashboardStats = async (req, res) => {
   try {
     const month_start = "DATE_TRUNC('month', NOW())";
@@ -12,9 +11,7 @@ exports.getDashboardStats = async (req, res) => {
     const pendingQuery = `SELECT COUNT(id) FROM appointments WHERE status = 'Pendente' AND appointment_time >= NOW() AND appointment_time < ${month_end}`;
 
     const [revenueResult, doneResult, pendingResult] = await Promise.all([
-      db.query(revenueQuery),
-      db.query(doneQuery),
-      db.query(pendingQuery)
+      db.query(revenueQuery), db.query(doneQuery), db.query(pendingQuery)
     ]);
 
     res.status(200).json({
@@ -28,7 +25,6 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-// Função para a agenda completa do administrador
 exports.getAllAppointments = async (req, res) => {
   try {
     let query = `
@@ -53,7 +49,6 @@ exports.getAllAppointments = async (req, res) => {
   }
 };
 
-// Função para os dados do gráfico de faturação
 exports.getRevenueChartData = async (req, res) => {
   const { period = '7days' } = req.query;
   let query;
@@ -78,7 +73,6 @@ exports.getRevenueChartData = async (req, res) => {
   }
 };
 
-// Função para os relatórios de desempenho
 exports.getPerformanceReport = async (req, res) => {
   try {
     const barberPerformanceQuery = `SELECT b.name AS barber_name, COUNT(a.id) AS completed_appointments, COALESCE(SUM(s.price), 0) AS total_revenue FROM barbers b LEFT JOIN appointments a ON b.id = a.barber_id AND a.status = 'Concluído' LEFT JOIN services s ON a.service_id = s.id GROUP BY b.name ORDER BY total_revenue DESC;`;
