@@ -1,4 +1,3 @@
-// src/controllers/adminController.js
 const db = require('../config/database');
 
 // Função para as estatísticas do topo do dashboard (CORRIGIDA E SEGURA)
@@ -42,7 +41,7 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({ error: 'Ocorreu um erro interno no getDashboardStats.' });
   }
 };
-// ... (o resto do arquivo continua igual)
+
 // Função para a agenda completa do administrador
 exports.getAllAppointments = async (req, res) => {
   try {

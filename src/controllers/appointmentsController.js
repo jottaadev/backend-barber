@@ -1,4 +1,3 @@
-// src/controllers/appointmentsController.js
 const db = require('../config/database');
 
 exports.create = async (req, res) => {

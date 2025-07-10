@@ -17,6 +17,7 @@ pool.on('connect', () => {
   console.log('✅ Base de dados conectada com sucesso!');
 });
 
+// Adiciona um listener para erros, para que a aplicação pare se não conseguir conectar
 pool.on('error', (err) => {
     console.error('❌ Erro inesperado na conexão com a base de dados', err);
     process.exit(-1);
